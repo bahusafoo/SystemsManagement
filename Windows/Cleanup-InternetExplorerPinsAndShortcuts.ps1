@@ -1,7 +1,7 @@
 ﻿###################################################
 # Cleanup-InternetExplorerPinsAndShortcuts.ps1
 # Authors: Sean Huggans, Doug Flaten
-$ScriptVersion = "22.7.22.8"
+$ScriptVersion = "22.7.22.9"
 ###################################################
 # Script Variables
 ###########################################
@@ -65,6 +65,9 @@ if ($RemovedPublicDesktopShortcuts -eq $true) {
 
 Log-Action -Message "Examining and cleaning up user profiles..."
 $users = Get-ChildItem -Path "$($env:SystemDrive)\users" | Where-Object { (($_.PSIsContainer) -and ($_.Name -ne "Public") -and ($_.Name -notlike "Admin*")) }
+# Add default user profile so that new users receive update profiles as well
+$users = $users += $(Get-Item -Path "C:\Users\Default" -Force)
+
 foreach ($user in $users.fullname)
 {
 	$userlayoutpath = "$($User)\AppData\Local\Microsoft\Windows\Shell"
