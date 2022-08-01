@@ -1,14 +1,14 @@
 ﻿################################################################################################################################
-# Run-GPUpdateSilentlyWithLoggingAndSuccessOutput.ps1
-# Script Author: Sean Huggans
-# Script Version 18.06.05.04
+# Run-GPUpdateSilentlyAsConsoleScript.ps1
+# Script Auther: Sean Huggans
+# Script Version 22.8.1.1
 ################################################################################################################################
 # Variables
 ################
 $LogDir = "C:\Temp\System Compliance"
 $LogName = "GPUpdate"
 $LogPath = "$($LogDir)\$($LogName).log"
- 
+
 ###################
 # Functions
 ###################
@@ -18,12 +18,12 @@ function Log-Action ($Message) {
     }
     "[ $(Get-Date -Format 'yyyy.MM.dd HH:mm:ss') ] $($Message)" | Out-File -FilePath $LogPath -Force -Append
 }
- 
+
 try {
     $JobName = "GPUpdate$PC-$(Get-Date -format "yyyyMMddHHmmss")"
     Start-Job -Name $JobName -ScriptBlock { & echo n | GPUpdate /Force /wait:0 } | Out-Null
     $count = 60
- 
+
     do {
         switch ($(Get-Job -Name $JobName).State) {
             "Running" {
