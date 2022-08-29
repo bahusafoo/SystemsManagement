@@ -1,0 +1,9 @@
+Download both of the following files below and place them within this exact directory.
+Do Not Rename files, and keep the directory structure + names this text file is inside intact!
+----------------------------------------------------------------------------------------------------------------
+
+https://download.microsoft.com/download/1/6/B/16B06F60-3B20-4FF2-B699-5E9B7962F9AE/VSU_4/vcredist_x86.exe
+https://download.microsoft.com/download/1/6/B/16B06F60-3B20-4FF2-B699-5E9B7962F9AE/VSU_4/vcredist_x64.exe
+
+----------------------------------------------------------------------------------------------------------------
+Info in this document was obtained from https://docs.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170

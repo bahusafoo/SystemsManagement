@@ -1,0 +1,9 @@
+Download both of the following files below and place them within this exact directory.
+Do Not Rename files, and keep the directory structure + names this text file is inside intact!
+----------------------------------------------------------------------------------------------------------------
+
+https://aka.ms/highdpimfc2013x86enu
+https://aka.ms/highdpimfc2013x64enu
+
+----------------------------------------------------------------------------------------------------------------
+Info in this document was obtained from https://docs.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170
