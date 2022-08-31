@@ -2,3 +2,4 @@
 **/VC_redist.x64.exe
 **/vcredist_x86.exe
 **/vcredist_x64.exe
+**/*.baselineconfig
