@@ -143,7 +143,6 @@ function Check-FileValue ($FullPath, $Comparison, $CheckValue, $LineItem) {
         $FullPath = $FullPath.Trim()
         if (Test-Path -Path $FullPath) {
             $FileObject = [array]$(Get-Item -Path $Fullpath | Sort-Object -Property CreationTime -Descending)[0]
-            Write-Host $FileObject.
             switch ($Comparison) {
                 "NTD" {
                     # Newer Than Days
@@ -171,34 +170,142 @@ function Check-FileValue ($FullPath, $Comparison, $CheckValue, $LineItem) {
                             return $false
                         }
                     } catch {
-                        Log-Action -Message " - - Error! Could not check last date modified!" -WriteHost $true
-                        return $false
+
                     }
                 }
                 "GT" {
                     # Greater Than (version)
-                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
-                    return "?"
+                    Try {
+                        if ($FileObject.VersionInfo.FileVersion) {
+                            #format the checkvalue into a proper version
+                            if ($CheckValue -notlike "*.*.*.*") {
+                                do {
+                                    $CheckValue = "$($CheckValue).0"
+                                } until ($CheckValue -like "*.*.*.*")
+                            }
+                            if ([version]$($FileObject.VersionInfo.FileVersion) -gt [version]$($CheckValue)) {
+                                Log-Action -Message " - - $($true) (File version $($FileObject.VersionInfo.FileVersion) is greater than $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) (File version $($FileObject.VersionInfo.FileVersion) is NOT greater than $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        } else {
+                            Log-Action -Message " - - Error! File does not have a version property!  Consider a more fitting comparison when checking this file." -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Error checking item (validate CheckValue)!" -WriteHost $true
+                        return $false
+                    }
                 }
                 "GE" {
                     # Greater Than or Equal to (version)
-                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
-                    return "?"
+                    Try {
+                        if ($FileObject.VersionInfo.FileVersion) {
+                            #format the checkvalue into a proper version
+                            if ($CheckValue -notlike "*.*.*.*") {
+                                do {
+                                    $CheckValue = "$($CheckValue).0"
+                                } until ($CheckValue -like "*.*.*.*")
+                            }
+                            if ([version]$($FileObject.VersionInfo.FileVersion) -ge [version]$($CheckValue)) {
+                                Log-Action -Message " - - $($true) (File version $($FileObject.VersionInfo.FileVersion) is greater than or equal to $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) (File version $($FileObject.VersionInfo.FileVersion) is NOT greater than or equal to $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        } else {
+                            Log-Action -Message " - - Error! File does not have a version property!  Consider a more fitting comparison when checking this file." -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Error checking item (validate CheckValue)!" -WriteHost $true
+                        return $false
+                    }
                 }
                 "LT" {
                     # Less Than (version)
-                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
-                    return "?"
+                    Try {
+                        if ($FileObject.VersionInfo.FileVersion) {
+                            #format the checkvalue into a proper version
+                            if ($CheckValue -notlike "*.*.*.*") {
+                                do {
+                                    $CheckValue = "$($CheckValue).0"
+                                } until ($CheckValue -like "*.*.*.*")
+                            }
+                            if ([version]$($FileObject.VersionInfo.FileVersion) -lt [version]$($CheckValue)) {
+                                Log-Action -Message " - - $($true) (File version $($FileObject.VersionInfo.FileVersion) is less than $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) (File version $($FileObject.VersionInfo.FileVersion) is NOT less than $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        } else {
+                            Log-Action -Message " - - Error! File does not have a version property!  Consider a more fitting comparison when checking this file." -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Error checking item (validate CheckValue)!" -WriteHost $true
+                        return $false
+                    }
                 }
                 "LE" {
                     # Less Than or Equal to (version)
-                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
-                    return "?"
+                    Try {
+                        if ($FileObject.VersionInfo.FileVersion) {
+                            #format the checkvalue into a proper version
+                            if ($CheckValue -notlike "*.*.*.*") {
+                                do {
+                                    $CheckValue = "$($CheckValue).0"
+                                } until ($CheckValue -like "*.*.*.*")
+                            }
+                            if ([version]$($FileObject.VersionInfo.FileVersion) -le [version]$($CheckValue)) {
+                                Log-Action -Message " - - $($true) (File version $($FileObject.VersionInfo.FileVersion) is less than or equal to $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) (File version $($FileObject.VersionInfo.FileVersion) is NOT less than or equal to $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        } else {
+                            Log-Action -Message " - - Error! File does not have a version property!  Consider a more fitting comparison when checking this file." -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Error checking item (validate CheckValue)!" -WriteHost $true
+                        return $false
+                    }
                 }
                 "EQ" {
                     # Equal to (version)
-                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
-                    return "?"
+                    Try {
+                        if ($FileObject.VersionInfo.FileVersion) {
+                            #format the checkvalue into a proper version
+                            if ($CheckValue -notlike "*.*.*.*") {
+                                do {
+                                    $CheckValue = "$($CheckValue).0"
+                                } until ($CheckValue -like "*.*.*.*")
+                            }
+                            if ([version]$($FileObject.VersionInfo.FileVersion) -eq [version]$($CheckValue)) {
+                                Log-Action -Message " - - $($true) (File version $($FileObject.VersionInfo.FileVersion) is equal to $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) (File version $($FileObject.VersionInfo.FileVersion) is NOT equal to $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        } else {
+                            Log-Action -Message " - - Error! File does not have a version property!  Consider a more fitting comparison when checking this file." -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Error checking item (validate CheckValue)!" -WriteHost $true
+                        return $false
+                    }
+                }
+                default {
+                    Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Comparison ($($Comparison.ToUpper())) is not a valid comparison type for $($ItemType) items!" -WriteHost $true
+                    return $false
                 }
             }
         } else {
@@ -265,8 +372,6 @@ if (Test-Path -Path $PolicyFile) {
                             }
                             "FILE" {
                                 if (($ItemComparisonType.ToUpper() -eq "NTD") -OR ($ItemComparisonType.ToUpper()  -eq "OTD") -OR ($ItemComparisonType.ToUpper() -eq "GT") -OR ($ItemComparisonType.ToUpper() -eq "GE") -OR ($ItemComparisonType.ToUpper() -eq "LT") -OR ($ItemComparisonType.ToUpper() -eq "LE") -OR ($ItemComparisonType.ToUpper() -eq "EQ")) {
-                                    Log-Action -Message " - Warning - Baseline item #$($CurrentCount): File Item Type handler not fully implemented." -WriteHost $true
-                                    #$Global:BaseLineStatus = "$($BaselineStatus)?"
                                     if ($(Check-FileValue -FullPath $ItemPath -CheckValue $ItemCheckValue -Comparison $ItemComparisonType -LineItem $CurrentCount) -eq $true) {
                                         $Global:BaseLineStatus = "$($BaselineStatus)1"
                                     } else {
