@@ -4,8 +4,7 @@
 ######################################################
 # Script Functions
 #####################################
-[string]$PolicyFile = "D:\Temp\BaselineTracking\baseline.config"
-#[string]$PolicyFile = "$($PSScriptRoot)\baseline.config"
+[string]$PolicyFile = "$($PSScriptRoot)\baseline.baselineconfig"
 $LogFile = "BaselineCheck.log"
 $LogDir = "$($env:SystemRoot)\Logs\Compliance"
 $LogPath = "$($LogDir)\$($LogFile)"
@@ -44,90 +43,170 @@ function Record-Compliance ($Details, $Score) {
 }
 
 function Check-RegKeyValue ($FullPath, $CheckValue, $Comparison, $LineItem) {
-
-    Try {
-        # Separate out the Key path from the value name
-        [array]$PathSplitParts = $FullPath.Split("\")
-        $ValueName = $PathSplitParts[$($PathSplitParts.count - 1)]
-        $KeyPath = ""
-        foreach ($PathSplitPart in $($PathSplitParts[0..$($PathSplitParts.count - 2)])) {
-            if ($KeyPath -ne "") {
-                $KeyPath = "$($KeyPath)\$($PathSplitPart)"
-            } else {
-                $KeyPath = $PathSplitPart
+    # Validate Parameters
+    if ((($Comparison) -and ($Comparions -ne "")) -and (($FullPath) -and ($FullPath -ne "")) -and (($CheckValue) -and ($CheckValue -ne "")) -and (($LineItem) -and ($LineItem -ne ""))) {
+        $FullPath = $FullPath.Trim()
+        Try {
+            # Separate out the Key path from the value name
+            [array]$PathSplitParts = $FullPath.Split("\")
+            $ValueName = $PathSplitParts[$($PathSplitParts.count - 1)]
+            $KeyPath = ""
+            foreach ($PathSplitPart in $($PathSplitParts[0..$($PathSplitParts.count - 2)])) {
+                if ($KeyPath -ne "") {
+                    $KeyPath = "$($KeyPath)\$($PathSplitPart)"
+                } else {
+                    $KeyPath = $PathSplitPart
+                }
             }
-        }
 
-        if (Test-Path -Path $KeyPath) {
-            Try {
-                $SetValue = $(Get-ItemPropertyValue -Path $KeyPath -Name $ValueName -ErrorAction Stop)
-                # Normalize different value types for accurate comparisons
-                switch -regex ($CheckValue)
-                {
-                   '^[0-9]*$' # Numbers Only
-                   {
-                        # turn into a version value for proper comaprison
-                       do {
-                           if ($SetValue.ToString() -notlike "*.*.*.*") {
-                               $SetValue = "$($SetValue).0"
-                           }
-                       } until ($SetValue.ToString() -like "*.*.*.*")
-                       #Log-Action -Message "Currently Set: $($SetValue.ToString())" -WriteHost $true
-                       do {
-                           if ($CheckValue.ToString() -notlike "*.*.*.*") {
-                               $CheckValue = "$($CheckValue).0"
-                           }
-                       } until ($CheckValue.ToString() -like "*.*.*.*")
-                       #Log-Action -Message "Checking Against: $($CheckValue.ToString())" -WriteHost $true
-                   }
-                   default {
-                        # By Default we'll do nothing here, let the string be a normal string.
-                   }
-                }
+            if (Test-Path -Path $KeyPath) {
+                Try {
+                    $SetValue = $(Get-ItemPropertyValue -Path $KeyPath -Name $ValueName -ErrorAction Stop)
+                    # Normalize different value types for accurate comparisons
+                    switch -regex ($CheckValue)
+                    {
+                       '^[0-9]*$' # Numbers Only
+                       {
+                            # turn into a version value for proper comaprison
+                           do {
+                               if ($SetValue.ToString() -notlike "*.*.*.*") {
+                                   $SetValue = "$($SetValue).0"
+                               }
+                           } until ($SetValue.ToString() -like "*.*.*.*")
+                           #Log-Action -Message "Currently Set: $($SetValue.ToString())" -WriteHost $true
+                           do {
+                               if ($CheckValue.ToString() -notlike "*.*.*.*") {
+                                   $CheckValue = "$($CheckValue).0"
+                               }
+                           } until ($CheckValue.ToString() -like "*.*.*.*")
+                           #Log-Action -Message "Checking Against: $($CheckValue.ToString())" -WriteHost $true
+                       }
+                       default {
+                            # By Default we'll do nothing here, let the string be a normal string.
+                       }
+                    }
             
-                Switch ($Comparison.ToUpper()) {
-                    "EQ" {                  
-                        if ($SetValue.Trim() -eq $CheckValue.Trim()) {
-                            Log-Action -Message " - - $($true) ($($SetValue) is equal to $($CheckValue))" -WriteHost $true
-                            return $true
-                        } else {
-                            Log-Action -Message " - - $($false) ($($SetValue) is NOT equal to $($CheckValue))" -WriteHost $true
+                    Switch ($Comparison.ToUpper()) {
+                        "EQ" {                  
+                            if ($SetValue.Trim() -eq $CheckValue.Trim()) {
+                                Log-Action -Message " - - $($true) ($($SetValue) is equal to $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) ($($SetValue) is NOT equal to $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        }
+                        "GE" {
+                            if ([version]$SetValue -ge [version]$CheckValue) {
+                                Log-Action -Message " - - $($true) ($($SetValue) is greater than or equal to $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) ($($SetValue) is NOT greater than or equal to $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        }
+                        "LE" {
+                            if ([version]$SetValue -le [version]$CheckValue) {
+                                Log-Action -Message " - - $($true) ($($SetValue) is less than or equal to $($CheckValue))" -WriteHost $true
+                                return $true
+                            } else {
+                                Log-Action -Message " - - $($false) - ($($SetValue) is NOT less than or equal to $($CheckValue))" -WriteHost $true
+                                return $false
+                            }
+                        }
+                        default {
+                            Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Comparison ($($Comparison.ToUpper())) is not a valid comparison type for REG items!" -WriteHost $true
                             return $false
                         }
                     }
-                    "GE" {
-                        if ([version]$SetValue -ge [version]$CheckValue) {
-                            Log-Action -Message " - - $($true) ($($SetValue) is greater than or equal to $($CheckValue))" -WriteHost $true
-                            return $true
-                        } else {
-                            Log-Action -Message " - - $($false) ($($SetValue) is NOT greater than or equal to $($CheckValue))" -WriteHost $true
-                            return $false
-                        }
-                    }
-                    "LE" {
-                        if ([version]$SetValue -le [version]$CheckValue) {
-                            Log-Action -Message " - - $($true) ($($SetValue) is less than or equal to $($CheckValue))" -WriteHost $true
-                            return $true
-                        } else {
-                            Log-Action -Message " - - $($false) - ($($SetValue) is NOT less than or equal to $($CheckValue))" -WriteHost $true
-                            return $false
-                        }
-                    }
-                    default {
-                        Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Comparison ($($Comparison.ToUpper())) is not a valid comparison type for REG items!" -WriteHost $true
-                        return $false
-                    }
+                } catch {
+                    Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Cannot find a value named ""$($ValueName)"" at ""$KeyPath)""." -WriteHost $true
+                    return $false
                 }
-            } catch {
-                Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Cannot find a value named ""$($ValueName)"" at ""$KeyPath)""." -WriteHost $true
+            } else {
+                Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Cannot find ""$($KeyPath)""." -WriteHost $true
                 return $false
             }
-        } else {
+        } catch {
             Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Cannot find ""$($KeyPath)""." -WriteHost $true
             return $false
         }
-    } catch {
-        Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Cannot find ""$($KeyPath)""." -WriteHost $true
+    } else {
+        Log-Action -Message " - - Error - Missing parameters passed." -WriteHost $true
+        return $false
+    }
+}
+
+function Check-FileValue ($FullPath, $Comparison, $CheckValue, $LineItem) {
+    # Validate Parameters
+    if ((($Comparison) -and ($Comparions -ne "")) -and (($FullPath) -and ($FullPath -ne "")) -and (($CheckValue) -and ($CheckValue -ne "")) -and (($LineItem) -and ($LineItem -ne ""))) {
+        $FullPath = $FullPath.Trim()
+        if (Test-Path -Path $FullPath) {
+            $FileObject = [array]$(Get-Item -Path $Fullpath | Sort-Object -Property CreationTime -Descending)[0]
+            Write-Host $FileObject.
+            switch ($Comparison) {
+                "NTD" {
+                    # Newer Than Days
+                    Try {
+                        if ($($FileObject.LastWriteTime) -ge $(Get-Date).AddDays(-$($CheckValue.Trim()))) {
+                            Log-Action -Message " - - $($true) (File was modified within $($CheckValue) days ago.)" -WriteHost $true
+                            return $true
+                        } else {
+                            Log-Action -Message " - - $($false) (File was NOT modified within $($CheckValue) days ago.)" -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Could not check last date modified!" -WriteHost $true
+                        return $false
+                    }
+                }
+                "OTD" {
+                    # Older Than Days
+                    Try {
+                        if ($($FileObject.LastWriteTime) -le $(Get-Date).AddDays(-$($CheckValue.Trim()))) {
+                            Log-Action -Message " - - $($true) (File was modified before $($CheckValue) days ago.)" -WriteHost $true
+                            return $true
+                        } else {
+                            Log-Action -Message " - - $($false) (File was NOT modified before $($CheckValue) days ago.)" -WriteHost $true
+                            return $false
+                        }
+                    } catch {
+                        Log-Action -Message " - - Error! Could not check last date modified!" -WriteHost $true
+                        return $false
+                    }
+                }
+                "GT" {
+                    # Greater Than (version)
+                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
+                    return "?"
+                }
+                "GE" {
+                    # Greater Than or Equal to (version)
+                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
+                    return "?"
+                }
+                "LT" {
+                    # Less Than (version)
+                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
+                    return "?"
+                }
+                "LE" {
+                    # Less Than or Equal to (version)
+                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
+                    return "?"
+                }
+                "EQ" {
+                    # Equal to (version)
+                    Log-Action -Message " - - file version checking not yet implemented!" -WriteHost $true
+                    return "?"
+                }
+            }
+        } else {
+            Log-Action -Message " - - Error - Baseline item #$($CurrentCount): Cannot find ""$($FullPath)""." -WriteHost $true
+            return $false
+        }
+    } else {
+        Log-Action -Message " - - Error - Missing parameters passed." -WriteHost $true
         return $false
     }
 }
@@ -170,28 +249,39 @@ if (Test-Path -Path $PolicyFile) {
 
                     # Validate data here vs. each item type's own switch - we may change this in the future but for now it seems more optimal
                     if (($ItemPath -ne "") -AND ($ItemPath -ne $null)) {
-                        if (($ItemComparisonType.ToUpper() -eq "EQ") -OR ($ItemComparisonType.ToUpper()  -eq "GE") -OR ($ItemComparisonType.ToUpper()  -eq "LE")) {
-                            Log-Action -Message " - Evaluating Item: $($ItemType) | $($ItemPath) | $($ItemComparisonType) | $($ItemCheckValue) | $($ItemDescription)" -WriteHost $true #TODO: Remove this
-                            switch ($ItemType) {
-                                "REG" {
+                        Log-Action -Message " - Evaluating Item: $($ItemType) | $($ItemPath) | $($ItemComparisonType) | $($ItemCheckValue) | $($ItemDescription)" -WriteHost $true #TODO: Remove this
+                        switch ($ItemType) {
+                            "REG" {
+                                if (($ItemComparisonType.ToUpper() -eq "EQ") -OR ($ItemComparisonType.ToUpper()  -eq "GE") -OR ($ItemComparisonType.ToUpper()  -eq "LE")) {
                                     if ($(Check-RegKeyValue -FullPath $ItemPath -CheckValue $ItemCheckValue -Comparison $ItemComparisonType -LineItem $CurrentCount) -eq $true) {
                                         $Global:BaseLineStatus = "$($BaselineStatus)1"
                                     } else {
                                         $Global:BaseLineStatus = "$($BaselineStatus)0"
                                     }
-                                }
-                                "File" {
-                                    Log-Action -Message " - Warning - Baseline item #$($CurrentCount): File Item Type handler not yet implemented." -WriteHost $true
-                                    $Global:BaseLineStatus = "$($BaselineStatus)?"
-                                }
-                                default {
-                                    Log-Action -Message " - Error - Baseline item #$($CurrentCount): $($ItemType) is not a valid item type." -WriteHost $true
+                                } else {
+                                    Log-Action -Message " - Error - Baseline item #$($CurrentCount): $($ItemComparisonType) is not a valid comparison type for $($ItemType) entries." -WriteHost $true
                                     $Global:BaseLineStatus = "$($BaselineStatus)0"
                                 }
                             }
-                        } else {
-                            Log-Action -Message " - Error - Baseline item #$($CurrentCount): $($ItemComparisonType) is not a valid comparison type." -WriteHost $true
-                            $Global:BaseLineStatus = "$($BaselineStatus)0"
+                            "FILE" {
+                                if (($ItemComparisonType.ToUpper() -eq "NTD") -OR ($ItemComparisonType.ToUpper()  -eq "OTD") -OR ($ItemComparisonType.ToUpper() -eq "GT") -OR ($ItemComparisonType.ToUpper() -eq "GE") -OR ($ItemComparisonType.ToUpper() -eq "LT") -OR ($ItemComparisonType.ToUpper() -eq "LE") -OR ($ItemComparisonType.ToUpper() -eq "EQ")) {
+                                    Log-Action -Message " - Warning - Baseline item #$($CurrentCount): File Item Type handler not fully implemented." -WriteHost $true
+                                    #$Global:BaseLineStatus = "$($BaselineStatus)?"
+                                    if ($(Check-FileValue -FullPath $ItemPath -CheckValue $ItemCheckValue -Comparison $ItemComparisonType -LineItem $CurrentCount) -eq $true) {
+                                        $Global:BaseLineStatus = "$($BaselineStatus)1"
+                                    } else {
+                                        $Global:BaseLineStatus = "$($BaselineStatus)0"
+                                    }
+
+                                } else {
+                                    Log-Action -Message " - Error - Baseline item #$($CurrentCount): $($ItemComparisonType) is not a valid comparison type for $($ItemType) entries." -WriteHost $true
+                                    $Global:BaseLineStatus = "$($BaselineStatus)0"
+                                }
+                            }
+                            default {
+                                Log-Action -Message " - Error - Baseline item #$($CurrentCount): $($ItemType) is not a valid item type." -WriteHost $true
+                                $Global:BaseLineStatus = "$($BaselineStatus)0"
+                            }
                         }
                     } else {
                         Log-Action -Message " - Error - Baseline item #$($CurrentCount): Item Path is not properly defined." -WriteHost $true
