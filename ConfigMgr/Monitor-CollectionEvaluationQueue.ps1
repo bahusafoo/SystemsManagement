@@ -3,9 +3,16 @@
 # Author: Sean Huggans
 # Version: 22.2.9.5
 ###################################################
+# Script will monitor for high collection count in eval queue, and send an alert when it's 
+# above the set number.  It will also alert when the threshhold drops below the number (all clear).
+# Script is meant for use on a scheduled task.  
+# Scheduled Task setup: 
+# Actions - script/program: \Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+# Arguments: -NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -File "<Path to script>\Monitor-CollectionEvaluationQueue.ps1"
 
 $SiteCode = "FOO" # Site code 
 $ProviderMachineName = "YOURSERVER.YOURDOMAIN.COM" # SMS Provider machine name
+$Threshold = 1000
 $BannerImagePath = "http://SOMESERVER.YOURDOMAIN.COM/BannerImages/Notif_GenericBanner.png"
 $initParams = @{}
 if((Get-Module ConfigurationManager) -eq $null) {
@@ -45,7 +52,7 @@ Try {
     New-ItemProperty -Path $ConfigMgrMonitoringRegKey -PropertyType String -Name "ActiveAlertWithEmailSent" -Value $false | Out-Null
 }
 
-if ($CollectionEvalQueueInfo.Count -ge 1000) {
+if ($CollectionEvalQueueInfo.Count -ge $Threshold) {
     if ($($EmailSent) -eq $true) {
         #Write-Host "Nothing to do, already sent notification email."
         # Do Nothing, we already sent an email about this occurrence
@@ -62,7 +69,7 @@ if ($CollectionEvalQueueInfo.Count -ge 1000) {
                 </tr>
                 <tr>
                   <td>
-                    <b>Notice!  There is currently $($CollectionEvalQueueInfo.Count) collections in the collection evaluation queue.  Software deployments via deployment tools are likely taking an abnormally large amount of time.  An all-clear will be sent when this number reduces below 1000.  This alert should be treated as a seperate occurence than any previous messages.</b>
+                    <b>Notice!  There are currently $($CollectionEvalQueueInfo.Count) collections in the collection evaluation queue.  Software deployments via deployment tools are likely taking an abnormally large amount of time.  An all-clear will be sent when this number reduces below $($Threshold).  This alert should be treated as a seperate occurence than any previous messages.</b>
                   </td>
                 </tr>
               </table>
@@ -97,7 +104,7 @@ if ($CollectionEvalQueueInfo.Count -ge 1000) {
                 </tr>
                 <tr>
                   <td>
-                    <b>The previous collection evaluation queue count is now at $($CollectionEvalQueueInfo.Count.ToString()), which is below the configured threshhold of 1000.  A new alert will be sent if this occurs again.</b>
+                    <b>The previous collection evaluation queue count is now at $($CollectionEvalQueueInfo.Count.ToString()), which is below the configured threshhold of $($Threshold).  A new alert will be sent if this occurs again.</b>
                   </td>
                 </tr>
               </table>
