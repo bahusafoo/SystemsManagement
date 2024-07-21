@@ -1,5 +1,5 @@
 ﻿##########################################
-# Remediate-LockedCrowdStrikeDevice.ps1
+# Remediate-BitLockeredCrowdStrikeDevice.ps1
 # Author(s): Sean Huggans
 $ScriptVersion = "24.07.20.1"
 ##########################################
