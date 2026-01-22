@@ -1,0 +1,339 @@
+﻿<File version="3.2">
+  <Code><![CDATA[# Warning: Do not rename Start-MyService, Invoke-MyService and Stop-MyService functions
+
+function Get-ScriptDirectory
+{
+	[OutputType([string])]
+	param ()
+	if ($null -ne $hostinvocation)
+	{
+		Split-Path $hostinvocation.MyCommand.path
+	}
+	else
+	{
+		Split-Path $script:MyInvocation.MyCommand.Path
+	}
+}
+
+function Log-Action ($Message)
+{
+	Write-Host "[ $(get-date -Format 'yyyy.MM.dd HH:mm:ss') ] [ $($global:VersionRunning) ] $($Message)"
+}
+
+function Start-MyService
+{
+	# Place one time startup code here.
+	# Initialize global variables and open connections if needed
+	##################################################
+	# Variables
+	########################################
+	$global:ScriptDir = Get-ScriptDirectory
+	$AppEXEName = "CALC.exe"
+	$global:VersionRunning = [version]$(Get-ItemProperty -Path "$(Get-ScriptDirectory)\$($AppEXEName)").VersionInfo.FileVersion
+	$global:LogLevel = 0
+	$global:bRunService = $true
+	$global:bServiceRunning = $false
+	$global:bServicePaused = $false
+	$global:SQLServer = ""
+	$global:RegistryBasePath = "HKLM:\SOFTWARE\bahusa.net\Systems Management\Central AppLocker Log Client"
+	##################################################
+	# Execution Logic
+	########################################
+	Get-AppConfig
+	if ($global:LogLevel -lt 1)
+	{
+		Log-Action -Message "Notice: LogLevel is set to $($global:LogLevel).  This will prevent SQL query logs.  If you need to troubleshoot, try setting this to 1 or 2 in the config."
+	}
+	Try
+	{
+		if (!(Test-Path -Path $global:RegistryBasePath))
+		{
+			New-Item -Path $global:RegistryBasePath -ItemType Directory -Force -ErrorAction Stop -Confirm:$false
+		}
+	}
+	catch
+	{
+		Log-Action -Message "Error creating local registry key, calling service stop"
+		Stop-MyService
+	}
+}
+
+function Invoke-MyService
+{
+	$global:bServiceRunning = $true
+	while ($global:bRunService)
+	{
+		try
+		{
+			if ($global:bServicePaused -eq $false) #Only act if service is not paused
+			{
+				#Place code for your service here
+				#e.g. $ProcessList = Get-Process solitaire -ErrorAction SilentlyContinue
+				
+				# Use Write-Host or any other PowerShell output function to write to the System's application log
+				
+				
+				[array]$AppLockerEntries = Get-AppLockerFileInformation -EventType Audited -EventLog -Statistics | Sort-Object -Property Counter
+				if ($AppLockerEntries.Count -gt 0)
+				{
+					
+					if ($global:SQLServer -ne "")
+					{
+						if (Test-Connection -ComputerName $global:SQLServer -Count 2)
+						{
+							Log-Action -Message "$($AppLockerEntries.Count) Total AppLocker Entries were found, checking to see if they have already been reported..."
+							foreach ($AppLockerEntry in $AppLockerEntries)
+							{
+								$CheckExistingRecordSQL = "SELECT * FROM AppLockerLogs WHERE ComputerName = '$($ENV:COMPUTERNAME)' and FileHash = '$($AppLockerEntry.FileHash.ToString())';"
+								[array]$ExistingRecords = Invoke-SQL -dataSource $global:SQLServer -database "AppLockerLogs" -sqlCommand $CheckExistingRecordSQL
+								if ($ExistingRecords.count -gt 0)
+								{
+									switch -wildcard ($ExistingRecords)
+									{
+										"Error: *" {
+											Log-Action -Message $ExistingRecords
+										}
+										"Unhandled Error: *" {
+											Log-Action -Message $ExistingRecords
+										}
+										default {
+											foreach ($ExistingRecord in $ExistingRecords)
+											{
+												
+											}
+											Log-Action -Message "Record for $($AppLockerEntry.FileHash) already existed."
+										}
+									}
+									
+								}
+								else
+								{
+									Log-Action -Message "Record for $($AppLockerEntry.FileHash.ToString()) does not exist, adding it..."
+									$NewRecordSQL = "INSERT INTO AppLockerLogs (ComputerName,FilePath,FilePublisher,FileHash,PolicyDecision) VALUES ('$($ENV:COMPUTERNAME)','$($AppLockerEntry.FilePath.ToString())','$($AppLockerEntry.FilePublisher.ToString())','$($AppLockerEntry.FileHash.ToString())','$($AppLockerEntry.PolicyDecision.ToString())');"
+									Log-Action -Message "SQL will be: $($NewRecordSQL)"
+									$NewRecordSQL = Invoke-SQL -dataSource $global:SQLServer -database "AppLockerLogs" -sqlCommand $NewRecordSQL
+									switch -wildcard ($ExistingRecords)
+									{
+										"Error: *" {
+											Log-Action -Message $ExistingRecords
+										}
+										"Unhandled Error: *" {
+											Log-Action -Message $ExistingRecords
+										}
+										default {
+											Log-Action -Message "Record for file hash '$($AppLockerEntry.FileHash)' at '$($AppLockerEntry.FilePath)' Added."
+										}
+									}
+								}
+							}
+						}
+						else
+						{
+							Log-Action -Message "The SQL server ($($global:SQLServer)) could not be reached.  Skipping reporting."
+						}
+					}
+					else
+					{
+						Log-Action -Message "The SQL Server variable was not obtained from the config file.  Calling service stop"
+						Stop-MyService
+					}
+				}
+				else
+				{
+					Log-Action -Message "There were no AppLocker Entries found during this cycle."
+				}
+				
+				
+			}
+		}
+		catch
+		{
+			# Log exception in application log
+			Write-Host $_.Exception.Message
+		}
+		# Adjust sleep timing to determine how often your service becomes active.
+		if ($global:bServicePaused -eq $true)
+		{
+			Start-Sleep -Seconds 20 # if the service is paused we sleep longer between checks.
+		}
+		else
+		{
+			Start-Sleep -Seconds 3600 # a lower number will make your service active more often and use more CPU cycles
+		}
+	}
+	$global:bServiceRunning = $false
+}
+
+function Stop-MyService
+{
+	$global:bRunService = $false # Signal main loop to exit
+	$CountDown = 15 # Maximum wait for loop to exit
+	while ($global:bServiceRunning -and $Countdown -gt 0)
+	{
+		Start-Sleep -Seconds 1 # wait for your main loop to exit
+		$Countdown = $Countdown - 1
+	}
+	Get-Process -Name CALC | Stop-Process -Force -ErrorAction SilentlyContinue
+	# Place code to be executed on service stop here
+	# Close files and connections, terminate jobs and
+	# use remove-module to unload blocking modules
+}
+
+function Pause-MyService
+{
+	# Service is being paused
+	# Save state 
+	$global:bServicePaused = $true
+	# Note that the thread your PowerShell script is running on is not suspended on 'pause'.
+	# It is your responsibility in the service loop to pause processing until a 'continue' command is issued.
+	# It is recommended to sleep for longer periods between loop iterations when the service is paused.
+	# in order to prevent excessive CPU usage by simply waiting and looping.
+}
+
+function Continue-MyService
+{
+	# Service is being continued from a paused state
+	# Restore any saved states if needed
+	$global:bServicePaused = $false
+}
+
+function Get-AppConfig
+{
+	$global:LogLevel = 0
+	Try
+	{
+		$Global:ConfigFileLines = Get-Content -Path "$(Get-ScriptDirectory)\CALC.config" -ErrorAction Stop
+		foreach ($ConfigFileLine in $global:ConfigFileLines)
+		{
+			switch -wildcard ($ConfigFileLine)
+			{
+				"*=*" {
+					Try
+					{
+						$SettingName = $ConfigFileLine.Split("=")[0].Trim()
+						$SettingValue = $ConfigFileLine.Split("=")[1].Trim()
+						if (($SettingName -ne "") -and ($SettingValue -ne ""))
+						{
+							switch ($SettingName.ToUpper())
+							{
+								"SQLSERVER" {
+									$global:SQLServer = $SettingValue
+									Log-Action -Message "Config: SQL Server Set to: $($SettingValue)"
+								}
+								"LOGLEVEL" {
+									[int]$global:LogLevel = $SettingValue
+									Log-Action -Message "Config: Logging Level Set to: $($SettingValue)"
+								}
+								default {
+									Log-Action -Message "Setting ""$($SettingName)"" is not used by this component and will be ignored."
+								}
+							}
+						}
+						else
+						{
+							Log-Action -Message "Config Line Error: ""$($ConfigFileLine)"".  This setting will be ignored.  In the case of a legitimate setting, default values will be used when possible."
+						}
+					}
+					catch
+					{
+						Log-Action -Message "Config Line Error: ""$($ConfigFileLine)"".  This setting will be ignored."
+					}
+					
+				}
+				" *" {
+					# Ignore
+				}
+				"#*" {
+					# Ignore
+				}
+				"" {
+					# Ignore
+				}
+				"`n" {
+					# Ignore
+				}
+				default
+				{
+					# Ignore
+				}
+			}
+		}
+		#
+	}
+	catch
+	{
+		Log-Action -Message "Error: Cannot load config.  Verify that a valid CALC.config file exists in the application installation directory.  Calling service stop!"
+		Stop-MyService
+	}
+}
+
+function Invoke-SQL
+{
+	param (
+		[string]$dataSource,
+		[string]$database,
+		[string]$sqlCommand = $(throw "Please specify a query.")
+	)
+	if (Test-Connection -ComputerName $dataSource -Count 2 -Quiet)
+	{
+		$connectionString = "Data Source=$dataSource; " +
+		"Integrated Security=SSPI; " +
+		"Encrypt=True;" +
+		"TrustServerCertificate=True;" +
+		"Initial Catalog=$database"
+		
+		$connection = new-object system.data.SqlClient.SQLConnection($connectionString)
+		$command = new-object system.data.sqlclient.sqlcommand($sqlCommand, $connection)
+		Try
+		{
+			$connection.Open()
+			
+			$adapter = New-Object System.Data.sqlclient.sqlDataAdapter $command
+			$dataset = New-Object System.Data.DataSet
+			$adapter.Fill($dataSet) | Out-Null
+			
+			$connection.Close()
+			
+			if ($LogLevel -le 1)
+			{
+				Log-Action -Message "Database ""$($database)"" on host ""$($dataSource)"" was successfully queried." -LogName $global:SQLLogFile
+			}
+			else
+			{
+				Log-Action -Message "Database ""$($database)"" on host ""$($dataSource)"" was successfully queried.  Log level higher than 0 (debug logging): $($sqlCommand)" -LogName $global:SQLLogFile
+			}
+			$Result = $dataSet.Tables
+		}
+		catch
+		{
+			$ErrorMessage = $PSItem.ToString()
+			switch -Wildcard ($ErrorMessage)
+			{
+				"*Login failed for user*" {
+					$ErrorParts = $ErrorMessage.split("`n")
+					$UserName = $ErrorParts[1].Split("'")[1].Replace("'", "")
+					
+					$QueryError = "User ""$($UserName)"" failed to login to the database."
+				}
+				default
+				{
+					$QueryError = "Unhandled Error: $($ErrorMessage)"
+				}
+			}
+			$Result = "Error: A query to database ""$($database)"" on host ""$($dataSource)"" failed."
+			Log-Action -Message $Result
+			if ($LogLevel -gt 0)
+			{
+				Log-Action -Message " - Log level higher than 0 (debug logging): $($QueryError)"
+			}
+		}
+	}
+	else
+	{
+		$Result = "Error: A query to the Database ""$($database)"" on host ""$($dataSource)"" was not attempted: $($dataSource) is unreachable."
+		Log-Action -Message $Result
+	}
+	return $Result
+}
+]]></Code>
+</File>
